@@ -1,4 +1,4 @@
-package ai.libs.hasco.pcsbasedoptimization;
+package ai.libs.hyperopt;
 
 import java.io.File;
 import java.io.FilenameFilter;

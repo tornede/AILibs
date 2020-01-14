@@ -1,4 +1,4 @@
-package ai.libs.hasco.pcsbasedoptimization;
+package ai.libs.hyperopt;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

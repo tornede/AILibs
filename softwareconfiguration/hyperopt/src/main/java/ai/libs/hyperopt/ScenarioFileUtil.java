@@ -1,4 +1,4 @@
-package ai.libs.hasco.pcsbasedoptimization;
+package ai.libs.hyperopt;
 
 import java.io.IOException;
 import java.util.ArrayList;

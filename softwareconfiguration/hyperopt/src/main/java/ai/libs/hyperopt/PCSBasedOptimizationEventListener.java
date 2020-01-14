@@ -1,4 +1,4 @@
-package ai.libs.hasco.pcsbasedoptimization;
+package ai.libs.hyperopt;
 
 import ai.libs.jaicore.basic.algorithm.events.AlgorithmEvent;
 import ai.libs.jaicore.graphvisualizer.events.graph.bus.AlgorithmEventListener;

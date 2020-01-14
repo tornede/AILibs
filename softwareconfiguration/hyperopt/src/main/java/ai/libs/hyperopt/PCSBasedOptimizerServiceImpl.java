@@ -1,4 +1,4 @@
-package ai.libs.hasco.pcsbasedoptimization;
+package ai.libs.hyperopt;
 
 import java.util.Collection;
 import java.util.HashMap;

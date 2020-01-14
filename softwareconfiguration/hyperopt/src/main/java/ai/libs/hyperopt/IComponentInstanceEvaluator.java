@@ -1,4 +1,4 @@
-package ai.libs.hasco.pcsbasedoptimization;
+package ai.libs.hyperopt;
 
 import ai.libs.hasco.model.ComponentInstance;
 import ai.libs.jaicore.basic.IObjectEvaluator;
