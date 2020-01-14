@@ -1,4 +1,4 @@
-package ai.libs.hyperopt.optimizer;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -8,20 +8,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.StringUtils;
-import org.api4.java.common.attributedobjects.IObjectEvaluator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ai.libs.hasco.model.ComponentInstance;
-import ai.libs.hyperopt.FileUtil;
-import ai.libs.hyperopt.OptimizationException;
-import ai.libs.hyperopt.PCSBasedOptimizerInput;
-import ai.libs.hyperopt.ScenarioFileUtil;
+import ai.libs.jaicore.basic.FileUtil;
+import ai.libs.jaicore.basic.IObjectEvaluator;
 
 /**
- *
+ * 
  * @author kadirayk
  *
  */
@@ -38,39 +38,44 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 	private Integer runCountLimit;
 	private Double wallClockLimit;
 	private String executionPath;
+	private Boolean paralellize;
+	private Integer numThreads;
 
 	private Logger logger = LoggerFactory.getLogger(SMACOptimizer.class);
 
-	public SMACOptimizer(final PCSBasedOptimizerInput input, final IObjectEvaluator<ComponentInstance, Double> evaluator) {
+	public SMACOptimizer(PCSBasedOptimizerInput input, IObjectEvaluator<ComponentInstance, Double> evaluator) {
 		this.input = input;
 		this.evaluator = evaluator;
 	}
 
 	/**
 	 * Used for building SMACOptimizer with options
-	 *
+	 * 
 	 * @param input
 	 * @param evaluator
 	 * @return
 	 */
-	public static Builder SMACOptimizerBuilder(final PCSBasedOptimizerInput input, final IObjectEvaluator<ComponentInstance, Double> evaluator) {
+	public static Builder SMACOptimizerBuilder(PCSBasedOptimizerInput input,
+			IObjectEvaluator<ComponentInstance, Double> evaluator) {
 		return new Builder(input, evaluator);
 	}
 
-	private SMACOptimizer(final Builder builder) {
-		this.input = builder.input;
-		this.evaluator = builder.evaluator;
-		this.algoRunsTimelimit = builder.algoRunsTimelimit;
-		this.alwaysRaceDefault = builder.alwaysRaceDefault;
-		this.costForCrash = builder.costForCrash;
-		this.cutoff = builder.cutoff;
-		this.deterministic = builder.deterministic;
-		this.memoryLimit = builder.memoryLimit;
-		this.overallObj = builder.overallObj;
-		this.runObj = builder.runObj;
-		this.runCountLimit = builder.runCountLimit;
-		this.wallClockLimit = builder.wallClockLimit;
-		this.executionPath = builder.executionPath;
+	private SMACOptimizer(Builder builder) {
+		input = builder.input;
+		evaluator = builder.evaluator;
+		algoRunsTimelimit = builder.algoRunsTimelimit;
+		alwaysRaceDefault = builder.alwaysRaceDefault;
+		costForCrash = builder.costForCrash;
+		cutoff = builder.cutoff;
+		deterministic = builder.deterministic;
+		memoryLimit = builder.memoryLimit;
+		overallObj = builder.overallObj;
+		runObj = builder.runObj;
+		runCountLimit = builder.runCountLimit;
+		wallClockLimit = builder.wallClockLimit;
+		executionPath = builder.executionPath;
+		paralellize = builder.paralellize;
+		numThreads = builder.numThreads;
 	}
 
 	public static class Builder {
@@ -87,8 +92,10 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		private Integer runCountLimit;
 		private Double wallClockLimit;
 		private String executionPath;
+		private Boolean paralellize = Boolean.FALSE;
+		private Integer numThreads = 1;
 
-		public Builder(final PCSBasedOptimizerInput input, final IObjectEvaluator<ComponentInstance, Double> evaluator) {
+		public Builder(PCSBasedOptimizerInput input, IObjectEvaluator<ComponentInstance, Double> evaluator) {
 			this.input = input;
 			this.evaluator = evaluator;
 		}
@@ -97,29 +104,29 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 			return new SMACOptimizer(this);
 		}
 
-		public Builder executionPath(final String executionPath) {
+		public Builder executionPath(String executionPath) {
 			this.executionPath = executionPath;
 			return this;
 		}
 
 		/**
 		 * Maximum amount of CPU-time used for optimization. Default: inf.
-		 *
+		 * 
 		 * @param algoRunsTimelimit
 		 * @return
 		 */
-		public Builder algoRunsTimelimit(final Integer algoRunsTimelimit) {
+		public Builder algoRunsTimelimit(Integer algoRunsTimelimit) {
 			this.algoRunsTimelimit = algoRunsTimelimit;
 			return this;
 		}
 
 		/**
 		 * Race new incumbents always against default configuration.
-		 *
+		 * 
 		 * @param alwaysRaceDefault
 		 * @return
 		 */
-		public Builder alwaysRaceDefault(final Integer alwaysRaceDefault) {
+		public Builder alwaysRaceDefault(Integer alwaysRaceDefault) {
 			this.alwaysRaceDefault = alwaysRaceDefault;
 			return this;
 		}
@@ -127,11 +134,11 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		/**
 		 * Defines the cost-value for crashed runs on scenarios with quality as run-obj.
 		 * Default: 2147483647.0.
-		 *
+		 * 
 		 * @param costForCrash
 		 * @return
 		 */
-		public Builder costForCrash(final Double costForCrash) {
+		public Builder costForCrash(Double costForCrash) {
 			this.costForCrash = costForCrash;
 			return this;
 		}
@@ -139,11 +146,11 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		/**
 		 * Maximum runtime, after which the target algorithm is cancelled. Required if
 		 * *run_obj* is runtime.
-		 *
+		 * 
 		 * @param cutoff
 		 * @return
 		 */
-		public Builder cutoff(final Double cutoff) {
+		public Builder cutoff(Double cutoff) {
 			this.cutoff = cutoff;
 			return this;
 		}
@@ -152,11 +159,11 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		 * If true, SMAC assumes that the target function or algorithm is deterministic
 		 * (the same static seed of 0 is always passed to the function/algorithm). If
 		 * false, different random seeds are passed to the target function/algorithm.
-		 *
+		 * 
 		 * @param deterministic
 		 * @return
 		 */
-		public Builder deterministic(final Integer deterministic) {
+		public Builder deterministic(Integer deterministic) {
 			this.deterministic = deterministic;
 			return this;
 		}
@@ -164,11 +171,11 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		/**
 		 * Maximum available memory the target algorithm can occupy before being
 		 * cancelled in MB.
-		 *
+		 * 
 		 * @param memoryLimit
 		 * @return
 		 */
-		public Builder memoryLimit(final Integer memoryLimit) {
+		public Builder memoryLimit(Integer memoryLimit) {
 			this.memoryLimit = memoryLimit;
 			return this;
 		}
@@ -176,11 +183,11 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		/**
 		 * PARX, where X is an integer defining the penalty imposed on timeouts (i.e.
 		 * runtimes that exceed the cutoff-time). Default: par10.
-		 *
+		 * 
 		 * @param overallObj
 		 * @return
 		 */
-		public Builder overallObj(final String overallObj) {
+		public Builder overallObj(String overallObj) {
 			this.overallObj = overallObj;
 			return this;
 		}
@@ -188,76 +195,126 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 		/**
 		 * Defines what metric to optimize. When optimizing runtime, cutoff_time is
 		 * required as well.
-		 *
+		 * 
 		 * @param runObj
 		 * @return
 		 */
-		public Builder runObj(final String runObj) {
+		public Builder runObj(String runObj) {
 			this.runObj = runObj;
 			return this;
 		}
 
 		/**
 		 * Maximum number of algorithm-calls during optimization. Default: inf.
-		 *
+		 * 
 		 * @param runCountLimit
 		 * @return
 		 */
-		public Builder runCountLimit(final Integer runCountLimit) {
+		public Builder runCountLimit(Integer runCountLimit) {
 			this.runCountLimit = runCountLimit;
 			return this;
 		}
 
 		/**
 		 * Maximum amount of wallclock-time used for optimization. Default: inf.
-		 *
+		 * 
 		 * @param wallClockLimit
 		 * @return
 		 */
-		public Builder wallClockLimit(final Double wallClockLimit) {
+		public Builder wallClockLimit(Double wallClockLimit) {
 			this.wallClockLimit = wallClockLimit;
+			return this;
+		}
+
+		/**
+		 * Run SMAC in parallel
+		 * 
+		 * @param parallelize
+		 * @return
+		 */
+		public Builder parallelize(Boolean parallelize) {
+			this.paralellize = parallelize;
+			return this;
+		}
+
+		/**
+		 * Set number of Threads in paralllel mode
+		 * 
+		 * @param numThreads
+		 * @return
+		 */
+		public Builder numThreads(Integer numThreads) {
+			this.numThreads = numThreads;
 			return this;
 		}
 
 	}
 
 	@Override
-	public void optimize(final String componentName) throws OptimizationException {
-		if (StringUtils.isEmpty(this.executionPath)) {
+	public void optimize() throws OptimizationException {
+		if (StringUtils.isEmpty(executionPath)) {
 			throw new OptimizationException("executionPath must be set for Optimizer");
 		}
-		String filePath = this.executionPath;
+		String filePath = executionPath;
 
-		this.startGrpcServer();
+		startGrpcServer();
 
-		String[] arr = componentName.split("\\.");
+		String[] arr = input.getRequestedComponent().split("\\.");
 		String name = arr[arr.length - 1];
 
 		try {
-			this.setPcsFileForComponent(name, filePath);
+			setPcsFileForComponent(name, filePath);
 		} catch (IOException e1) {
-			this.logger.error(e1.getMessage());
-			throw new OptimizationException(MessageFormat.format("Unable to set PCS file with path={0} for Component={1}", filePath, name));
+			logger.error(e1.getMessage());
+			throw new OptimizationException(
+					MessageFormat.format("Unable to set PCS file with path={0} for Component={1}", filePath, name));
 		}
-		this.setOptions();
+		setOptions();
 
 		// start SMAC
-		this.startSMACScript(filePath);
+		startSMACScript(filePath);
 	}
 
-	private void startSMACScript(final String filePath) throws OptimizationException {
+	private void startSMACScript(String filePath) throws OptimizationException {
 		PCSBasedOptimizerConfig config = PCSBasedOptimizerConfig.get("conf/smac-optimizer-config.properties");
 		Integer port = config.getPort();
 		ScenarioFileUtil.updateParam(filePath, "gRPC_port", String.valueOf(port));
-		ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c", "cd " + filePath + "&& python run.py --scenario scenario.txt");
+
+		StringBuilder command = new StringBuilder();
+		command.append("cd ").append(filePath).append("&& python run.py --scenario scenario.txt");
+
+		if (paralellize) {
+			command.append(" --shared_model True --input_psmac_dirs smac3-output*");
+
+			ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+			for (int i = 0; i < numThreads; i++) {
+				executor.submit(() -> executeCommand(command.toString(), filePath));
+			}
+			executor.shutdown();
+			try {
+				if (!executor.awaitTermination(5, TimeUnit.MINUTES)) {
+					executor.shutdownNow();
+				}
+			} catch (InterruptedException ex) {
+				executor.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
+		} else {
+			executeCommand(command.toString(), filePath);
+		}
+
+	}
+
+	private void executeCommand(String command, String filePath) {
+		ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c", command);
 
 		builder.redirectErrorStream(true);
 		Process p = null;
 		try {
 			p = builder.start();
 		} catch (IOException e) {
-			this.logger.error(e.getMessage());
-			throw new OptimizationException(MessageFormat.format("Unable spawn python process={0} in path={1} ", "run.py", filePath));
+			logger.error(e.getMessage());
+			logger.error(MessageFormat.format("Unable spawn python process={0} in path={1} ", "run.py", filePath));
 		}
 		BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
@@ -267,7 +324,7 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 			try {
 				line = r.readLine();
 			} catch (IOException e) {
-				this.logger.error(e.getMessage());
+				logger.error(e.getMessage());
 			}
 			smacOutLines.add(line);
 			System.out.println("SMAC out: " + line);
@@ -284,52 +341,52 @@ public class SMACOptimizer extends AbstractPCSBasedOptimizer {
 
 	/**
 	 * Options will be set in the scenario file
-	 *
+	 * 
 	 */
 	public void setOptions() {
 		Map<String, String> params = new HashMap<>();
-		if (this.algoRunsTimelimit != null) {
-			params.put("algo_runs_timelimit", String.valueOf(this.algoRunsTimelimit));
+		if (algoRunsTimelimit != null) {
+			params.put("algo_runs_timelimit", String.valueOf(algoRunsTimelimit));
 		}
-		if (this.alwaysRaceDefault != null) {
-			params.put("always_race_default", String.valueOf(this.alwaysRaceDefault));
-		}
-
-		if (this.costForCrash != null) {
-			params.put("cost_for_crash", String.valueOf(this.costForCrash));
-		}
-		if (this.cutoff != null) {
-			params.put("cutoff", String.valueOf(this.cutoff));
+		if (alwaysRaceDefault != null) {
+			params.put("always_race_default", String.valueOf(alwaysRaceDefault));
 		}
 
-		if (this.deterministic != null) {
-			params.put("deterministic", String.valueOf(this.deterministic));
+		if (costForCrash != null) {
+			params.put("cost_for_crash", String.valueOf(costForCrash));
+		}
+		if (cutoff != null) {
+			params.put("cutoff", String.valueOf(cutoff));
 		}
 
-		if (this.memoryLimit != null) {
-			params.put("memory_limit", String.valueOf(this.memoryLimit));
+		if (deterministic != null) {
+			params.put("deterministic", String.valueOf(deterministic));
 		}
-		if (this.overallObj != null) {
-			params.put("overall_obj", String.valueOf(this.overallObj));
+
+		if (memoryLimit != null) {
+			params.put("memory_limit", String.valueOf(memoryLimit));
 		}
-		if (this.runObj != null) {
-			params.put("run_obj", String.valueOf(this.runObj));
+		if (overallObj != null) {
+			params.put("overall_obj", String.valueOf(overallObj));
 		}
-		if (this.runCountLimit != null) {
-			params.put("runcount_limit", String.valueOf(this.runCountLimit));
+		if (runObj != null) {
+			params.put("run_obj", String.valueOf(runObj));
 		}
-		if (this.wallClockLimit != null) {
-			params.put("wallclock_limit", String.valueOf(this.wallClockLimit));
+		if (runCountLimit != null) {
+			params.put("runcount_limit", String.valueOf(runCountLimit));
 		}
-		ScenarioFileUtil.updateMultipleParams(this.executionPath, params);
+		if (wallClockLimit != null) {
+			params.put("wallclock_limit", String.valueOf(wallClockLimit));
+		}
+		ScenarioFileUtil.updateMultipleParams(executionPath, params);
 	}
 
 	public String getExecutionPath() {
-		return this.executionPath;
+		return executionPath;
 	}
 
 	public PCSBasedOptimizerInput getInput() {
-		return this.input;
+		return input;
 	}
 
 }

@@ -1,26 +1,24 @@
-package ai.libs.hyperopt.optimizer;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.api4.java.common.attributedobjects.IObjectEvaluator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ai.libs.hasco.model.ComponentInstance;
-import ai.libs.hyperopt.FileUtil;
-import ai.libs.hyperopt.PCSBasedOptimizerGrpcServer;
-import ai.libs.hyperopt.PCSBasedOptimizerInput;
+import ai.libs.jaicore.basic.FileUtil;
+import ai.libs.jaicore.basic.IObjectEvaluator;
 
 /**
- * Implements {@link IOptimizer} interface and contains common methods for
+ * Implements {@link Optimizer} interface and contains common methods for
  * PCSBasedOptimizers
- *
+ * 
  * @author kadirayk
  *
  */
-public abstract class AbstractPCSBasedOptimizer implements IOptimizer {
+public abstract class AbstractPCSBasedOptimizer implements Optimizer {
 
 	private static final Logger logger = LoggerFactory.getLogger(AbstractPCSBasedOptimizer.class);
 
@@ -33,7 +31,7 @@ public abstract class AbstractPCSBasedOptimizer implements IOptimizer {
 	protected void startGrpcServer() {
 		Runnable task = () -> {
 			try {
-				PCSBasedOptimizerGrpcServer.start(this.evaluator, this.input);
+				PCSBasedOptimizerGrpcServer.start(evaluator, input);
 			} catch (IOException | InterruptedException e) {
 				logger.error(e.getMessage());
 			}
@@ -45,13 +43,13 @@ public abstract class AbstractPCSBasedOptimizer implements IOptimizer {
 
 	/**
 	 * updates the paramfile parameter in the scenario file of the optimizer
-	 *
+	 * 
 	 * @param componentName
 	 * @param filePath      is the execution directory for the optimizer that
 	 *                      contains a scenario.txt file
 	 * @throws IOException
 	 */
-	protected void setPcsFileForComponent(final String componentName, final String filePath) throws IOException {
+	protected void setPcsFileForComponent(String componentName, String filePath) throws IOException {
 		List<String> lines = null;
 		List<String> newLines = new ArrayList<>();
 		lines = FileUtil.readFileAsList(filePath + "/scenario.txt");

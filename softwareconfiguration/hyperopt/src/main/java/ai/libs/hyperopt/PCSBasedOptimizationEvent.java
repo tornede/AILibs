@@ -1,8 +1,7 @@
-package ai.libs.hyperopt;
-
-import org.api4.java.algorithm.events.ScoredSolutionCandidateFoundEvent;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import ai.libs.hasco.model.ComponentInstance;
+import ai.libs.jaicore.basic.algorithm.events.ScoredSolutionCandidateFoundEvent;
 
 public class PCSBasedOptimizationEvent implements ScoredSolutionCandidateFoundEvent<ComponentInstance, Double> {
 	private ComponentInstance componentInstance;
@@ -10,7 +9,7 @@ public class PCSBasedOptimizationEvent implements ScoredSolutionCandidateFoundEv
 	private String algorithmId;
 	private long timeStamp;
 
-	public PCSBasedOptimizationEvent(final ComponentInstance componentInstance, final Double score, final String algorithmId) {
+	public PCSBasedOptimizationEvent(ComponentInstance componentInstance, Double score, String algorithmId) {
 		this.componentInstance = componentInstance;
 		this.score = score;
 		this.algorithmId = algorithmId;
@@ -19,22 +18,22 @@ public class PCSBasedOptimizationEvent implements ScoredSolutionCandidateFoundEv
 
 	@Override
 	public String getAlgorithmId() {
-		return this.algorithmId;
+		return algorithmId;
 	}
 
 	@Override
 	public long getTimestamp() {
-		return this.timeStamp;
+		return timeStamp;
 	}
 
 	@Override
 	public Double getScore() {
-		return this.score;
+		return score;
 	}
 
 	@Override
 	public ComponentInstance getSolutionCandidate() {
-		return this.componentInstance;
+		return componentInstance;
 	}
 
 }

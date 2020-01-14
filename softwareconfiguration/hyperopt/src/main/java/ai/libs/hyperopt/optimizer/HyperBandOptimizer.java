@@ -1,4 +1,4 @@
-package ai.libs.hyperopt.optimizer;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -8,18 +8,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
-import org.api4.java.common.attributedobjects.IObjectEvaluator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ai.libs.hasco.model.ComponentInstance;
-import ai.libs.hyperopt.FileUtil;
-import ai.libs.hyperopt.OptimizationException;
-import ai.libs.hyperopt.PCSBasedOptimizerInput;
-import ai.libs.hyperopt.ScenarioFileUtil;
+import ai.libs.jaicore.basic.FileUtil;
+import ai.libs.jaicore.basic.IObjectEvaluator;
 
 /**
- *
+ * 
  * @author kadirayk
  *
  */
@@ -30,8 +27,10 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 	private Double maxBudget;
 	private Integer nIterations;
 	private String executionPath;
+	private Boolean parallelize;
+	private Integer numThreads;
 
-	public HyperBandOptimizer(final PCSBasedOptimizerInput input, final IObjectEvaluator<ComponentInstance, Double> evaluator) {
+	public HyperBandOptimizer(PCSBasedOptimizerInput input, IObjectEvaluator<ComponentInstance, Double> evaluator) {
 		this.input = input;
 		this.evaluator = evaluator;
 	}
@@ -39,22 +38,25 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 	/**
 	 * returns a builder for the optional parameters, mandatory parameters must be
 	 * given
-	 *
+	 * 
 	 * @param input
 	 * @param evaluator
 	 * @return
 	 */
-	public static Builder HyperBandOptimizerBuilder(final PCSBasedOptimizerInput input, final IObjectEvaluator<ComponentInstance, Double> evaluator) {
+	public static Builder HyperBandOptimizerBuilder(PCSBasedOptimizerInput input,
+			IObjectEvaluator<ComponentInstance, Double> evaluator) {
 		return new Builder(input, evaluator);
 	}
 
-	private HyperBandOptimizer(final Builder builder) {
-		this.input = builder.input;
-		this.evaluator = builder.evaluator;
-		this.minBudget = builder.minBudget;
-		this.maxBudget = builder.maxBudget;
-		this.nIterations = builder.nIterations;
-		this.executionPath = builder.executionPath;
+	private HyperBandOptimizer(Builder builder) {
+		input = builder.input;
+		evaluator = builder.evaluator;
+		minBudget = builder.minBudget;
+		maxBudget = builder.maxBudget;
+		nIterations = builder.nIterations;
+		executionPath = builder.executionPath;
+		parallelize = builder.parallelize;
+		numThreads = builder.numThreads;
 	}
 
 	public static class Builder {
@@ -64,8 +66,10 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 		private Double maxBudget;
 		private Integer nIterations;
 		private String executionPath;
+		private Boolean parallelize = Boolean.FALSE;
+		private Integer numThreads = 1;
 
-		public Builder(final PCSBasedOptimizerInput input, final IObjectEvaluator<ComponentInstance, Double> evaluator) {
+		public Builder(PCSBasedOptimizerInput input, IObjectEvaluator<ComponentInstance, Double> evaluator) {
 			this.input = input;
 			this.evaluator = evaluator;
 		}
@@ -73,45 +77,65 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 		/**
 		 * executionPath is the folder that BOHBOptimizer script runs, pcs files will
 		 * also be created here
-		 *
+		 * 
 		 * @param executionPath
 		 * @return
 		 */
-		public Builder executionPath(final String executionPath) {
+		public Builder executionPath(String executionPath) {
 			this.executionPath = executionPath;
 			return this;
 		}
 
 		/**
 		 * The smallest budget to consider. Needs to be positive!
-		 *
+		 * 
 		 * @param minBudget
 		 * @return
 		 */
-		public Builder minBudget(final Double minBudget) {
+		public Builder minBudget(Double minBudget) {
 			this.minBudget = minBudget;
 			return this;
 		}
 
 		/**
 		 * The largest budget to consider. Needs to be larger than min_budget!
-		 *
+		 * 
 		 * @param maxBudget
 		 * @return
 		 */
-		public Builder maxBudget(final Double maxBudget) {
+		public Builder maxBudget(Double maxBudget) {
 			this.maxBudget = maxBudget;
 			return this;
 		}
 
 		/**
 		 * Number of iterations
-		 *
+		 * 
 		 * @param nIterations
 		 * @return
 		 */
-		public Builder nIterations(final Integer nIterations) {
+		public Builder nIterations(Integer nIterations) {
 			this.nIterations = nIterations;
+			return this;
+		}
+
+		/**
+		 * run HyperBand in parallel
+		 * @param parallelize
+		 * @return
+		 */
+		public Builder parallelize(Boolean parallelize) {
+			this.parallelize = parallelize;
+			return this;
+		}
+
+		/**
+		 * number of threads when running in parallel
+		 * @param numThreads
+		 * @return
+		 */
+		public Builder numThreads(Integer numThreads) {
+			this.numThreads = numThreads;
 			return this;
 		}
 
@@ -121,40 +145,40 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 
 	}
 
-	@Override
-	public void optimize(final String componentName) throws OptimizationException {
-		if (StringUtils.isEmpty(this.executionPath)) {
+	public void optimize() throws OptimizationException {
+		if (StringUtils.isEmpty(executionPath)) {
 			throw new OptimizationException("executionPath must be set for Optimizer");
 		}
-		String filePath = this.executionPath;
+		String filePath = executionPath;
 
 		// start server thread
-		this.startGrpcServer();
+		startGrpcServer();
 
-		String[] arr = componentName.split("\\.");
+		String[] arr = input.getRequestedComponent().split("\\.");
 		String name = arr[arr.length - 1];
 
 		try {
-			this.setPcsFileForComponent(name, filePath);
+			setPcsFileForComponent(name, filePath);
 		} catch (IOException e1) {
-			this.logger.error(e1.getMessage());
-			throw new OptimizationException(MessageFormat.format("Unable to set PCS file with path={0} for Component={1}", filePath, name));
+			logger.error(e1.getMessage());
+			throw new OptimizationException(
+					MessageFormat.format("Unable to set PCS file with path={0} for Component={1}", filePath, name));
 		}
 
-		String command = this.setOptions();
+		String command = setOptions();
 
 		// start HpBandSter
-		this.startHyperBandScript(filePath, command);
+		startHyperBandScript(filePath, command);
 	}
 
 	/**
 	 * Start the python script in its execution directory
-	 *
+	 * 
 	 * @param filePath
 	 * @param command
 	 * @throws OptimizationException
 	 */
-	private void startHyperBandScript(final String filePath, final String command) throws OptimizationException {
+	private void startHyperBandScript(String filePath, String command) throws OptimizationException {
 		PCSBasedOptimizerConfig config = PCSBasedOptimizerConfig.get("conf/smac-optimizer-config.properties");
 		Integer port = config.getPort();
 		ScenarioFileUtil.updateParam(filePath, "gRPC_port", String.valueOf(port));
@@ -165,8 +189,9 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 		try {
 			p = builder.start();
 		} catch (IOException e) {
-			this.logger.error(e.getMessage());
-			throw new OptimizationException(MessageFormat.format("Unable spawn python process={0} in path={1} ", command, filePath));
+			logger.error(e.getMessage());
+			throw new OptimizationException(
+					MessageFormat.format("Unable spawn python process={0} in path={1} ", command, filePath));
 		}
 		BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
@@ -176,7 +201,7 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 			try {
 				line = r.readLine();
 			} catch (IOException e) {
-				this.logger.error(e.getMessage());
+				logger.error(e.getMessage());
 			}
 			hpbandOutLines.add(line);
 			System.out.println("HpBandSter out: " + line);
@@ -193,19 +218,22 @@ public class HyperBandOptimizer extends AbstractPCSBasedOptimizer {
 
 	/**
 	 * options are appended to the command
-	 *
+	 * 
 	 * @return
 	 */
 	public String setOptions() {
 		StringBuilder command = new StringBuilder("python HpBandSterOptimizer.py");
-		if (this.minBudget != null) {
-			command.append(" --min_budget ").append(this.minBudget);
+		if (minBudget != null) {
+			command.append(" --min_budget ").append(minBudget);
 		}
-		if (this.maxBudget != null) {
-			command.append(" --max_budget ").append(this.maxBudget);
+		if (maxBudget != null) {
+			command.append(" --max_budget ").append(maxBudget);
 		}
-		if (this.nIterations != null) {
-			command.append(" --n_iterations ").append(this.nIterations);
+		if (nIterations != null) {
+			command.append(" --n_iterations ").append(nIterations);
+		}
+		if(parallelize) {
+			command.append(" --n_workers ").append(numThreads);
 		}
 		return command.toString();
 	}

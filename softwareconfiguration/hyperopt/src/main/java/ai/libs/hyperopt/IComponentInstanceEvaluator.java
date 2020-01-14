@@ -1,11 +1,10 @@
-package ai.libs.hyperopt;
-
-import org.api4.java.common.attributedobjects.IObjectEvaluator;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import ai.libs.hasco.model.ComponentInstance;
+import ai.libs.jaicore.basic.IObjectEvaluator;
 
 /**
- *
+ * 
  * @author kadirayk
  *
  */

@@ -1,4 +1,4 @@
-package ai.libs.hyperopt;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -7,8 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.api4.java.common.attributedobjects.IObjectEvaluator;
-import org.api4.java.common.attributedobjects.ObjectEvaluationFailedException;
+import org.jfree.util.Log;
 
 import ai.libs.hasco.model.Component;
 import ai.libs.hasco.model.ComponentInstance;
@@ -17,11 +16,13 @@ import ai.libs.hasco.pcsbasedoptimization.proto.PCSBasedComponentProto;
 import ai.libs.hasco.pcsbasedoptimization.proto.PCSBasedEvaluationResponseProto;
 import ai.libs.hasco.pcsbasedoptimization.proto.PCSBasedOptimizerServiceGrpc.PCSBasedOptimizerServiceImplBase;
 import ai.libs.hasco.pcsbasedoptimization.proto.PCSBasedParameterProto;
+import ai.libs.jaicore.basic.IObjectEvaluator;
+import ai.libs.jaicore.basic.algorithm.exceptions.ObjectEvaluationFailedException;
 import io.grpc.stub.StreamObserver;
 
 /**
  * gRPC service implementation for PCSBasedOptimizers
- *
+ * 
  * @author kadirayk
  *
  */
@@ -30,61 +31,91 @@ public class PCSBasedOptimizerServiceImpl extends PCSBasedOptimizerServiceImplBa
 	private PCSBasedOptimizerInput input;
 	private IObjectEvaluator<ComponentInstance, Double> evaluator;
 
-	public PCSBasedOptimizerServiceImpl(final IObjectEvaluator<ComponentInstance, Double> evaluator, final PCSBasedOptimizerInput input) {
+	private Map<String, String> parameterMapping;
+
+	public PCSBasedOptimizerServiceImpl(IObjectEvaluator<ComponentInstance, Double> evaluator,
+			PCSBasedOptimizerInput input) {
 		this.evaluator = evaluator;
 		this.input = input;
+		if (evaluator instanceof ComponentInstanceEvaluator) {
+			parameterMapping = ((ComponentInstanceEvaluator) evaluator).getParameterMapping();
+			if (parameterMapping != null && !parameterMapping.isEmpty()) {
+				parameterMapping.forEach((k, v) -> System.out.println(k + ":" + v));
+			}
+		}
 	}
 
 	/**
 	 * Optimizer scripts call this method with a component name and a list of
 	 * parameters for that component. The corresponding component will be
 	 * instantiated with the parameters as a componentInstance.
-	 *
+	 * 
 	 * ComponentInstance will be evaluated with the given evaluator. A response
 	 * containing an evalutation score will return to the caller script
 	 */
 	@Override
-	public void evaluate(final PCSBasedComponentProto request, final StreamObserver<PCSBasedEvaluationResponseProto> responseObserver) {
-		Collection<Component> components = this.input.getComponents();
-		ComponentInstance componentInstance = this.resolveSatisfyingInterfaces(components, request.getName(), request.getParametersList());
+	public void evaluate(PCSBasedComponentProto request,
+			StreamObserver<PCSBasedEvaluationResponseProto> responseObserver) {
+		Collection<Component> components = input.getComponents();
+		System.err.println(Thread.currentThread().getName());
+		
+		ComponentInstance componentInstance = resolveSatisfyingInterfaces(components, request.getName(),
+				request.getParametersList());
 
 		Double score = 0.0;
 		try {
-			score = this.evaluator.evaluate(componentInstance);
+			System.out.println(componentInstance);
+			score = evaluator.evaluate(componentInstance);
 		} catch (InterruptedException | ObjectEvaluationFailedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
-		PCSBasedEvaluationResponseProto response = PCSBasedEvaluationResponseProto.newBuilder().setResult(score).build();
+		PCSBasedEvaluationResponseProto response = PCSBasedEvaluationResponseProto.newBuilder().setResult(score)
+				.build();
 
 		responseObserver.onNext(response);
 		responseObserver.onCompleted();
+		System.out.println("response completed");
 	}
 
 	/**
 	 * Creates a ComponentInstance based on the given componentName, components, and
 	 * a list of component parameters. Recursively resolves satisfying interfaces.
-	 *
+	 * 
 	 * @param components
 	 * @param componentName
 	 * @param params
 	 * @return
 	 */
-	private ComponentInstance resolveSatisfyingInterfaces(final Collection<Component> components, final String componentName, final List<PCSBasedParameterProto> params) {
-		Component cmp = components.stream().filter(c -> c.getName().contains(componentName)).findFirst().get();
-		Set<String> requiredInterfaces = cmp.getRequiredInterfaces().keySet();
+	private ComponentInstance resolveSatisfyingInterfaces(Collection<Component> components, String componentName,
+			List<PCSBasedParameterProto> params) {
+		Optional<Component> opt = components.stream().filter(c -> c.getName().contains(componentName)).findFirst();
+		Component cmp = null;
+		if (opt.isPresent()) {
+			cmp = opt.get();
+		} else {
+			Log.error("component does not exist:" + componentName);
+		}
+
+		Map<String, String> requiredInterfaces = new HashMap<>(); // namespacedName,key
+		for (Map.Entry<String, String> e : cmp.getRequiredInterfaces().entrySet()) {
+			requiredInterfaces.put(HASCOToPCSConverter.nameSpaceInterface(cmp, e.getValue()), e.getKey());
+		}
 
 		Set<Parameter> hascoParams = cmp.getParameters();
 
 		Map<String, String> componentParameters = new HashMap<>();
 
 		for (Parameter hp : hascoParams) {
-			Optional<PCSBasedParameterProto> op = params.stream().filter(p -> p.getKey().contains(componentName + "." + hp)).findFirst();
+			Optional<PCSBasedParameterProto> op = params.stream().filter(
+					p -> parameterMapping.getOrDefault(p.getKey(), p.getKey()).contains(componentName + "." + hp))
+					.findFirst();
 			if (op.isPresent()) {
 				PCSBasedParameterProto param = op.get();
-				int indexOfLastDot = param.getKey().lastIndexOf(".");
-				String key = param.getKey().substring(indexOfLastDot + 1);
+				int indexOfLastDot = parameterMapping.getOrDefault(param.getKey(), param.getKey()).lastIndexOf(".");
+				String key = parameterMapping.getOrDefault(param.getKey(), param.getKey())
+						.substring(indexOfLastDot + 1);
 				componentParameters.put(key, param.getValue());
 			}
 		}
@@ -94,15 +125,20 @@ public class PCSBasedOptimizerServiceImpl extends PCSBasedOptimizerServiceImplBa
 			return new ComponentInstance(cmp, componentParameters, satisfyingInterfaces);
 		}
 
-		for (String requiredInterface : requiredInterfaces) {
-			PCSBasedParameterProto param = params.stream().filter(p -> p.getKey().equals(requiredInterface)).findFirst().get();
+		Map<String, ComponentInstance> satisfyingInterfaces = new HashMap<>();
+		for (String requiredInterface : requiredInterfaces.keySet()) {
+			Optional<PCSBasedParameterProto> optionalParam = params.stream()
+					.filter(p -> parameterMapping.getOrDefault(p.getKey(), p.getKey()).equals(requiredInterface))
+					.findFirst();
+			if (!optionalParam.isPresent()) {
+				continue;
+			}
+			PCSBasedParameterProto param = optionalParam.get();
 			String satisfyingClassName = param.getValue();
-			ComponentInstance compInstance = this.resolveSatisfyingInterfaces(components, satisfyingClassName, params);
-			Map<String, ComponentInstance> satisfyingInterfaces = new HashMap<>();
-			satisfyingInterfaces.put(componentName, compInstance);
-			return new ComponentInstance(cmp, componentParameters, satisfyingInterfaces);
+			ComponentInstance compInstance = resolveSatisfyingInterfaces(components, satisfyingClassName, params);
+			satisfyingInterfaces.put(requiredInterfaces.get(requiredInterface), compInstance);
 		}
-		return null;
+		return new ComponentInstance(cmp, componentParameters, satisfyingInterfaces);
 	}
 
 }

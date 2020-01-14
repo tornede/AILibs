@@ -1,11 +1,11 @@
-package ai.libs.hyperopt;
+package ai.libs.hasco.pcsbasedoptimization;
 
 import java.util.Collection;
 
 import ai.libs.hasco.model.Component;
 
 /**
- *
+ * 
  * @author kadirayk
  *
  */
@@ -14,18 +14,26 @@ public class PCSBasedOptimizerInput {
 	private Collection<Component> components;
 
 	private String requestedInterface;
+	private String requestedComponent;
 
-	public PCSBasedOptimizerInput(final Collection<Component> components, final String requestedInterface) {
+	public PCSBasedOptimizerInput(Collection<Component> components, String requestedComponent, String requestedInterface) {
 		this.components = components;
 		this.requestedInterface = requestedInterface;
+		this.requestedComponent = requestedComponent;
 	}
 
 	public Collection<Component> getComponents() {
-		return this.components;
+		return components;
 	}
 
+
 	public String getRequestedInterface() {
-		return this.requestedInterface;
+		return requestedInterface;
 	}
+	
+	public String getRequestedComponent() {
+		return requestedComponent;
+	}
+
 
 }
